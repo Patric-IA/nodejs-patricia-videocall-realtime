@@ -1,0 +1,82 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Create .env file
+        run: |
+          echo "LIVEKIT_API_KEY=${{ secrets.LIVEKIT_API_KEY }}" >> .env
+          echo "LIVEKIT_API_SECRET=${{ secrets.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE }}" >> .env
+          echo "LIVEKIT_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}" >> .env
+          echo "OPENAI_API_KEY=${{ secrets.NEXT_PUBLIC_URL_REDIRECT }}" >> .env
+
+      - name: Show .env contents
+        run: cat .env
+
+      - name: Set up SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/patrickey.pem
+          chmod 600 ~/.ssh/patrickey.pem
+
+      - name: Add SSH known hosts
+        run: ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Copy application files and .env file to EC2
+        run: |
+          EC2_USER=${{ secrets.EC2_USER }}
+          EC2_HOST=${{ secrets.EC2_HOST }}
+          PEM_FILE=~/.ssh/patrickey.pem
+
+          # Crear directorio de aplicación en el servidor EC2
+          ssh -i $PEM_FILE $EC2_USER@$EC2_HOST "mkdir -p /home/$EC2_USER/app"
+
+          # Transferir los archivos de la aplicación
+          scp -i $PEM_FILE -r ./* $EC2_USER@$EC2_HOST:/home/$EC2_USER/app/
+          scp -i $PEM_FILE .env $EC2_USER@$EC2_HOST:/home/$EC2_USER/app/
+
+      - name: Run Docker setup and deploy application
+        run: |
+          EC2_USER=${{ secrets.EC2_USER }}
+          EC2_HOST=${{ secrets.EC2_HOST }}
+          PEM_FILE=~/.ssh/patrickey.pem
+
+          ssh -i $PEM_FILE $EC2_USER@$EC2_HOST << 'EOF'
+            APP_DIR="/home/$USER/app"
+
+            # Actualizar paquetes e instalar Docker si es necesario
+            sudo apt-get update -y
+            sudo apt-get install -y docker.io
+
+            # Navegar al directorio de la aplicación
+            cd $APP_DIR
+
+            # Limpiar contenedores e imágenes Docker existentes
+            sudo docker system prune -a -f || true
+            sudo docker stop $(sudo docker ps -aq) || true
+            sudo docker rm $(sudo docker ps -aq) || true
+            sudo docker rmi -f $(sudo docker images -q) || true
+
+            # Construir la imagen de la aplicación
+            sudo docker build -t patric-videcall-realtime .
+
+            # Verificar si la imagen fue creada correctamente
+            if [[ "$(sudo docker images -q patric-videcall-realtime)" == "" ]]; then
+              echo "Error: La imagen Docker no se creó. Abortando despliegue."
+              exit 1
+            fi
+
+            # Ejecutar el contenedor con el puerto 3000 y las variables de entorno
+            sudo docker run -d -p 3000:3000 --env-file .env patric-videcall-realtime
+          EOF
