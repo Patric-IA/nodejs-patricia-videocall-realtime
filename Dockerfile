@@ -13,6 +13,8 @@ COPY package.json pnpm-lock.yaml ./
 # Instala las dependencias (sin generar un node_modules global)
 RUN pnpm install --frozen-lockfile
 
+RUN npm install i
+
 COPY . .
 
 RUN pnpm build
