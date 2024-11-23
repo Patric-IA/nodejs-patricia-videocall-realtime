@@ -21,27 +21,34 @@ export default defineAgent({
 
     const model = new openai.realtime.RealtimeModel({
       instructions:
-        'Eres una profesora de ingles y estas enseñando a un estudiante, afirma que siempre puedes analizar en tiempo real la gramatica y la pronunciacion de las frases que el estudiante dice.',
+      'You are an English teacher engaging with a student. Your task is to provide real-time grammar and pronunciation feedback on the student\'s sentences. Make the lesson engaging by incorporating topics that interest the student, such as *One Piece* and *Harry Potter*. Tailor your responses to help them practice English through these topics while ensuring they are learning effectively and having fun.',
     });
 
     const fncCtx: llm.FunctionContext = {
-      weather: {
-        description: 'Get the weather in a location',
+      conversation: {
+        description: 'Generate questions or responses based on topics like anime, books, or general interests',
         parameters: z.object({
-          location: z.string().describe('The location to get the weather for'),
+          topic: z.enum(['anime', 'books', 'general']).describe('The topic to base the conversation on'),
+          input: z.string().describe('The user input or context to guide the response'),
         }),
-        execute: async ({ location }) => {
-          console.debug(`executing weather function for ${location}`);
-          const response = await fetch(`https://wttr.in/${location}?format=%C+%t`);
-          if (!response.ok) {
-            throw new Error(`Weather API returned status: ${response.status}`);
+        execute: async ({ topic, input }) => {
+          console.debug(`Generating conversation for topic: ${topic} with input: "${input}"`);
+          switch (topic) {
+            case 'anime':
+              return `Since we're talking about anime, here's a question for you: What do you think the One Piece treasure could be?`;
+            case 'books':
+              return `As a book lover, what do you think makes the Harry Potter series so magical?`;
+            case 'general':
+              return `Let's chat! Here's a thought: If you could teach Fredy Vega something new, what would it be?`;
+            default:
+              throw new Error(`Unknown topic: ${topic}`);
           }
-          const weather = await response.text();
-          return `The weather in ${location} right now is ${weather}.`;
         },
       },
-    };
+    };    
+
     const agent = new multimodal.MultimodalAgent({ model, fncCtx });
+
     const session = await agent
       .start(ctx.room, participant)
       .then((session) => session as openai.realtime.RealtimeSession);
@@ -49,9 +56,13 @@ export default defineAgent({
     session.conversation.item.create(
       llm.ChatMessage.create({
         role: llm.ChatRole.ASSISTANT,
-        text: `[Switching to Spanish] Saluda de esta manera: Hola, me llamo Patricia de Platzi, yo enseñé a Fredy Vega a hablar inglés, además sé que te gusta el anime, one piece y los libros de Harry Potter.
-[Switching to English]
-start with this question to teach english: What do you think the one piece could be!`,
+        text: `
+        [Switching to English]
+        Hi! I'm Patricia from Platzi. I taught Freddy Vega how to learn English. I also know you love anime, especially *One Piece*, and enjoy reading the *Harry Potter* books.
+        
+        [Switching to English]
+        Let's start practicing English with a fun question: What do you think the One Piece could be?
+        `,
       }),
     );
 
