@@ -17,9 +17,9 @@ jobs:
       - name: Create .env file
         run: |
           echo "LIVEKIT_API_KEY=${{ secrets.LIVEKIT_API_KEY }}" >> .env
-          echo "LIVEKIT_API_SECRET=${{ secrets.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE }}" >> .env
-          echo "LIVEKIT_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}" >> .env
-          echo "OPENAI_API_KEY=${{ secrets.NEXT_PUBLIC_URL_REDIRECT }}" >> .env
+          echo "LIVEKIT_API_SECRET=${{ secrets.LIVEKIT_API_SECRET }}" >> .env
+          echo "LIVEKIT_URL=${{ secrets.LIVEKIT_URL }}" >> .env
+          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> .env
 
       - name: Show .env contents
         run: cat .env
